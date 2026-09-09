@@ -1,0 +1,57 @@
+\begin{table*}[t]
+\centering
+\caption{Task-separated target-macro comparisons. Panel A contains only locally evaluated MoleculeACE methods. Panel B re-runs every Panel-A architecture on the five GraphCliff external assays under the same train-only five-fold protocol, and additionally reports the vendored MoleculeACE AFP, CNN, GAT, GCN, and MPNN architectures. Panel C evaluates a matched-pair \method{}-edit instantiation on ACNet. Mean $\mathbin{\pm}$ target-level standard deviation is reported when per-target values are available. Lower RMSE is better; higher ROC--AUC and AP are better.}
+\label{tab:main}
+\scriptsize
+\renewcommand{\arraystretch}{1.02}
+\begin{tabular*}{0.86\textwidth}{@{\extracolsep{\fill}}lrr}
+\toprule
+\multicolumn{3}{l}{\textit{A. MoleculeACE regression (30 targets)}}\\
+Method & RMSE & Cliff RMSE\\
+\midrule
+Linear ECFP & 0.835 $\mathbin{\pm}$ 0.109 & 0.867 $\mathbin{\pm}$ 0.080\\
+ExtraTrees ECFP & 0.703 $\mathbin{\pm}$ 0.075 & 0.798 $\mathbin{\pm}$ 0.062\\
+Random forest ECFP & 0.731 $\mathbin{\pm}$ 0.080 & 0.816 $\mathbin{\pm}$ 0.066\\
+ECFP-SVM & 0.673 $\mathbin{\pm}$ 0.070 & 0.765 $\mathbin{\pm}$ 0.057\\
+HistGBM ECFP & 0.721 $\mathbin{\pm}$ 0.077 & 0.808 $\mathbin{\pm}$ 0.058\\
+MLP ECFP & 0.855 $\mathbin{\pm}$ 0.102 & 0.880 $\mathbin{\pm}$ 0.075\\
+Chemprop & 0.882 $\mathbin{\pm}$ 0.096 & 0.941 $\mathbin{\pm}$ 0.088\\
+GINE + NodeNorm & 0.901 $\mathbin{\pm}$ 0.108 & 0.958 $\mathbin{\pm}$ 0.098\\
+GraphCliff & 0.858 $\mathbin{\pm}$ 0.102 & 0.928 $\mathbin{\pm}$ 0.092\\
+\textbf{\method} & \textbf{0.569 $\mathbin{\pm}$ 0.078} & \textbf{0.638 $\mathbin{\pm}$ 0.092}\\
+\midrule
+\multicolumn{3}{l}{\textit{B. GraphCliff external regression (5 assays)}}\\
+Method & RMSE & Cliff RMSE\\
+\midrule
+Linear ECFP & 0.588 $\mathbin{\pm}$ 0.117 & 0.685 $\mathbin{\pm}$ 0.258\\
+RBF-SVM ECFP & 0.618 $\mathbin{\pm}$ 0.162 & 0.718 $\mathbin{\pm}$ 0.310\\
+HistGBM ECFP & 1.046 $\mathbin{\pm}$ 0.401 & 1.091 $\mathbin{\pm}$ 0.662\\
+MLP ECFP & 0.946 $\mathbin{\pm}$ 0.247 & 0.911 $\mathbin{\pm}$ 0.351\\
+ExtraTrees ECFP & 0.713 $\mathbin{\pm}$ 0.146 & 0.817 $\mathbin{\pm}$ 0.273\\
+Random forest ECFP & 0.761 $\mathbin{\pm}$ 0.172 & 0.837 $\mathbin{\pm}$ 0.295\\
+Chemprop & 0.782 $\mathbin{\pm}$ 0.141 & 0.801 $\mathbin{\pm}$ 0.259\\
+GINE + NodeNorm & 0.795 $\mathbin{\pm}$ 0.161 & 0.790 $\mathbin{\pm}$ 0.240\\
+GraphCliff encoder & 0.974 $\mathbin{\pm}$ 0.339 & 1.056 $\mathbin{\pm}$ 0.460\\
+AFP & 1.394 $\mathbin{\pm}$ 0.182 & 1.375 $\mathbin{\pm}$ 0.195\\
+CNN & 0.970 $\mathbin{\pm}$ 0.213 & 1.055 $\mathbin{\pm}$ 0.490\\
+GAT & 1.419 $\mathbin{\pm}$ 0.341 & 1.573 $\mathbin{\pm}$ 0.595\\
+GCN & 1.438 $\mathbin{\pm}$ 0.286 & 1.542 $\mathbin{\pm}$ 0.568\\
+MPNN & 1.393 $\mathbin{\pm}$ 0.333 & 1.445 $\mathbin{\pm}$ 0.716\\
+\textbf{\method} & \textbf{0.530 $\mathbin{\pm}$ 0.156} & \textbf{0.596 $\mathbin{\pm}$ 0.300}\\
+\midrule
+\multicolumn{3}{l}{\textit{C. ACNet pair classification (190 targets)}}\\
+Method & ROC--AUC & AP\\
+\midrule
+Linear ECFP & 0.864 $\mathbin{\pm}$ 0.144 & 0.407 $\mathbin{\pm}$ 0.274\\
+RBF-SVM ECFP & 0.927 $\mathbin{\pm}$ 0.109 & 0.695 $\mathbin{\pm}$ 0.275\\
+HistGBM ECFP & 0.910 $\mathbin{\pm}$ 0.148 & 0.678 $\mathbin{\pm}$ 0.278\\
+MLP ECFP & 0.785 $\mathbin{\pm}$ 0.238 & 0.470 $\mathbin{\pm}$ 0.316\\
+ExtraTrees ECFP & 0.933 $\mathbin{\pm}$ 0.112 & 0.696 $\mathbin{\pm}$ 0.270\\
+Random forest ECFP & 0.929 $\mathbin{\pm}$ 0.116 & 0.678 $\mathbin{\pm}$ 0.270\\
+Chemprop + pair head & 0.782 $\mathbin{\pm}$ 0.166 & 0.397 $\mathbin{\pm}$ 0.312\\
+GINE + PairNorm + pair head & 0.769 $\mathbin{\pm}$ 0.171 & 0.351 $\mathbin{\pm}$ 0.282\\
+GraphCliff encoder + pair head & 0.710 $\mathbin{\pm}$ 0.223 & 0.329 $\mathbin{\pm}$ 0.301\\
+\textbf{\method{}-edit} & \textbf{0.949 $\mathbin{\pm}$ 0.091} & \textbf{0.753 $\mathbin{\pm}$ 0.261}\\
+\bottomrule
+\end{tabular*}
+\end{table*}

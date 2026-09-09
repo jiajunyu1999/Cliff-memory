@@ -1,0 +1,66 @@
+# Python/build artefacts
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Local environments and IDE files
+.venv/
+.venv-*/
+venv/
+env/
+.idea/
+.vscode/
+.DS_Store
+
+# Experiment outputs, logs, checkpoints and temporary files
+outputs/
+logs/
+cache/
+tmp/
+reports/results/
+reports/**/*.csv
+reports/**/*.json
+reports/**/*.png
+reports/**/*.pdf
+*.log
+*.out
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.pkl
+*.pickle
+*.joblib
+
+# Large/local datasets and archives. Keep only explicitly documented fixtures.
+data/**
+!data/README.md
+third_party/**
+*.tar
+*.tar.gz
+*.zip
+*.7z
+
+# Generated paper build files (source and selected figures remain trackable)
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.log
+paper/*.out
+paper/*.synctex.gz
+paper/*.pdf
+paper/figures/
+
+# Workspace-only notes
+.quota_test_check
+AGENTS.md

@@ -1,0 +1,15 @@
+\begin{table*}[t]
+\centering
+\caption{Dataset statistics. A supervised unit is one activity record for the regression collections and one matched molecular pair for ACNet. The event column denotes cliff molecules for regression and positive pairs for ACNet; percentages are relative to supervised units.}
+\label{tab:datasets}
+\small
+\begin{tabular}{lrrrrrrr}
+\toprule
+Collection & Targets & Unique mol. & Units & Events (\%) & Train & Validation & Test\\
+\midrule
+MoleculeACE & 30 & 35,633 & 48,714 & 18,831 (38.7) & 38,912 & -- & 9,802\\
+GraphCliff external & 5 & 296 & 296 & 122 (41.2) & 234 & -- & 62\\
+ACNet & 190 & 53,085 & 402,079 & 20,861 (5.2) & 321,590 & 40,119 & 40,370\\
+\bottomrule
+\end{tabular}
+\end{table*}

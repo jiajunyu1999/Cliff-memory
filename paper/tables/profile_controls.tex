@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{Response-profile permutation and leakage stress controls on 30 MoleculeACE targets under five-fold train-only evaluation. Values are target-macro RMSE. $^{\dagger}$The no-exclusion condition deliberately re-injects the benchmark endpoint and is an invalid, contaminated upper bound.}
+\label{tab:profile-controls}
+\footnotesize
+\begin{tabular}{lrrr}
+\toprule
+Condition & Overall & Cliff & Non-cliff\\
+\midrule
+Chemistry only & 0.6440 & 0.7417 & 0.5855\\
+TAPER with shuffled profiles & 0.6742 & 0.7716 & 0.6178\\
+TAPER, strict exclusion & 0.5927 & 0.6727 & 0.5443\\
+TAPER, target-name exclusion & 0.5929 & 0.6731 & 0.5444\\
+TAPER, no exclusion$^{\dagger}$ & 0.1991 & 0.1975 & 0.1985\\
+\bottomrule
+\end{tabular}
+\end{table}

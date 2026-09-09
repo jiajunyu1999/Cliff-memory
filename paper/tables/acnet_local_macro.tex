@@ -1,0 +1,21 @@
+\begin{table}[t]
+\centering
+\caption{Locally executed ACNet comparison over the same 190 targets. Values are target-macro mean $\mathbin{\pm}$ standard deviation. Higher is better.}
+\label{tab:acnet-local-macro}
+\scriptsize
+\begin{tabular}{lrr}
+\toprule
+Method & ROC--AUC & AP\\
+\midrule
+Linear ECFP & 0.864 $\mathbin{\pm}$ 0.144 & 0.407 $\mathbin{\pm}$ 0.274\\
+RF-ECFP & 0.929 $\mathbin{\pm}$ 0.116 & 0.678 $\mathbin{\pm}$ 0.270\\
+ExtraTrees-ECFP & 0.933 $\mathbin{\pm}$ 0.112 & 0.696 $\mathbin{\pm}$ 0.270\\
+ECFP-SVM & 0.927 $\mathbin{\pm}$ 0.109 & 0.695 $\mathbin{\pm}$ 0.275\\
+HGB-ECFP & 0.910 $\mathbin{\pm}$ 0.148 & 0.678 $\mathbin{\pm}$ 0.278\\
+MLP-ECFP & 0.785 $\mathbin{\pm}$ 0.238 & 0.470 $\mathbin{\pm}$ 0.316\\
+Chemprop & 0.782 $\mathbin{\pm}$ 0.166 & 0.397 $\mathbin{\pm}$ 0.312\\
+GINE + PairNorm & 0.769 $\mathbin{\pm}$ 0.171 & 0.351 $\mathbin{\pm}$ 0.282\\
+GraphCliff & 0.710 $\mathbin{\pm}$ 0.223 & 0.329 $\mathbin{\pm}$ 0.301\\
+\bottomrule
+\end{tabular}
+\end{table}

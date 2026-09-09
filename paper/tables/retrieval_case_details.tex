@@ -1,0 +1,18 @@
+\begin{table*}[t]
+\centering
+\caption{Closest structural neighbors for the held-out examples in Figure~\ref{fig:retrieval-cases}. Ranking uses only the frozen chemistry kernel against official-training molecules.}
+\label{tab:retrieval-cases}
+\small
+\begin{tabular}{llrlrrr}
+\toprule
+Target & Query & Rank & Structural neighbor & $K_{chem}$ & Neighbor $y$ & Query error: base$\to$ours\\
+\midrule
+CHEMBL4792\_Ki & CHEMBL3649223 & 1 & CHEMBL3649188 & 0.907 & 7.28 & 1.61$\to$0.11\\
+CHEMBL4792\_Ki & CHEMBL3649223 & 2 & CHEMBL3649176 & 0.907 & 6.30 & 1.61$\to$0.11\\
+CHEMBL219\_Ki & CHEMBL326877 & 1 & CHEMBL106635 & 0.802 & 5.82 & 1.42$\to$0.12\\
+CHEMBL219\_Ki & CHEMBL326877 & 2 & CHEMBL422959 & 0.787 & 6.02 & 1.42$\to$0.12\\
+CHEMBL262\_Ki & CHEMBL1992371 & 1 & CHEMBL1975647 & 0.749 & 8.30 & 1.28$\to$0.03\\
+CHEMBL262\_Ki & CHEMBL1992371 & 2 & CHEMBL1994538 & 0.676 & 7.80 & 1.28$\to$0.03\\
+\bottomrule
+\end{tabular}
+\end{table*}

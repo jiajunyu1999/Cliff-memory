@@ -1,0 +1,23 @@
+\begin{table}[t]
+\centering
+\caption{Local five-fold MoleculeACE comparison. Values are mean $\mathbin{\pm}$ standard deviation across 30 targets after averaging folds within each target. $P$ values are Holm-adjusted one-sided paired Wilcoxon tests of whether each baseline has larger target-level error than \method.}
+\label{tab:local-cv-significance}
+\scriptsize
+\begin{tabular}{lrrr}
+\toprule
+Method & RMSE & Cliff RMSE & $P$ (cliff)\\
+\midrule
+Linear ECFP & 0.834 $\mathbin{\pm}$ 0.110 & 0.871 $\mathbin{\pm}$ 0.082 & $<0.001$\\
+RF-ECFP & 0.731 $\mathbin{\pm}$ 0.082 & 0.817 $\mathbin{\pm}$ 0.064 & $<0.001$\\
+ExtraTrees-ECFP & 0.704 $\mathbin{\pm}$ 0.076 & 0.801 $\mathbin{\pm}$ 0.059 & $<0.001$\\
+ECFP-SVM & 0.673 $\mathbin{\pm}$ 0.070 & 0.768 $\mathbin{\pm}$ 0.056 & $<0.001$\\
+HGB-ECFP & 0.723 $\mathbin{\pm}$ 0.079 & 0.812 $\mathbin{\pm}$ 0.058 & $<0.001$\\
+MLP-ECFP & 0.858 $\mathbin{\pm}$ 0.100 & 0.882 $\mathbin{\pm}$ 0.076 & $<0.001$\\
+Chemprop & 0.882 $\mathbin{\pm}$ 0.096 & 0.941 $\mathbin{\pm}$ 0.088 & $<0.001$\\
+GINE + NodeNorm & 0.901 $\mathbin{\pm}$ 0.108 & 0.958 $\mathbin{\pm}$ 0.098 & $<0.001$\\
+GraphCliff & 0.858 $\mathbin{\pm}$ 0.102 & 0.928 $\mathbin{\pm}$ 0.092 & $<0.001$\\
+MTPNet & 0.728 $\mathbin{\pm}$ 0.089 & 0.821 $\mathbin{\pm}$ 0.133 & $<0.001$\\
+\textbf{\method} & \textbf{0.593 $\mathbin{\pm}$ 0.076} & \textbf{0.673 $\mathbin{\pm}$ 0.069} & --\\
+\bottomrule
+\end{tabular}
+\end{table}

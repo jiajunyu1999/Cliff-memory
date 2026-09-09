@@ -1,0 +1,957 @@
+% JCIM-style review manuscript: single column with wide, readable floats.
+\documentclass[manuscript,nonacm]{acmart}
+
+\AtBeginDocument{\providecommand\BibTeX{{Bib\TeX}}}
+\settopmatter{printacmref=false}
+\renewcommand{\footnotetextcopyrightpermission}[1]{}
+\pagestyle{plain}
+\raggedbottom
+\setlength{\emergencystretch}{4em}
+
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{xspace}
+\usepackage{microtype}
+\usepackage{placeins}
+\usepackage{float}
+\usepackage{pdflscape}
+
+\newcommand{\method}{TAPER\xspace}
+\newcommand{\mace}{MoleculeACE\xspace}
+
+\begin{document}
+
+\title{Target-Excluded Response Memory for Generalizable Activity-Cliff Prediction}
+
+\author{Anonymous Authors}
+\affiliation{\institution{Anonymous Institution}\country{}}
+\email{anonymous@example.com}
+\renewcommand{\shortauthors}{Anonymous et al.}
+
+\begin{abstract}
+Activity cliffs violate the local smoothness assumption underlying many
+structure-based activity predictors: nearly identical molecules can have
+substantially different potency against the same target. We hypothesize that a
+molecule's measurements in other biological contexts provide functional
+information complementary to its chemical structure. We introduce \method as a
+target-excluded response-memory framework: each molecule is represented by
+collision-free chemical environments and by its ChEMBL response profile after
+removing the prediction target and all biologically equivalent targets. Sparse
+coverage, standardized potency, assay-resolved context, and fit-selected dense
+memory coordinates are combined with chemistry in a single
+positive-semidefinite kernel and fitted by target-specific support vector
+regression. On 30 MoleculeACE targets, three repeated training-only five-fold
+evaluations reduce macro RMSE by $8.01\%$ overall and $9.32\%$ on cliff
+molecules relative to the identical chemistry-only predictor. The frozen model
+confirms on the official test split. Component restrictions, sensitivity
+analyses, and molecule-level cases on the same benchmark show that the gain
+depends on molecule-specific, target-excluded response geometry rather than
+nearest-label transfer or indiscriminate feature addition. External regression
+and matched-pair classification collections show that the same response-memory
+principle transfers beyond the primary MoleculeACE regression setting.
+\end{abstract}
+
+\keywords{activity cliffs, response memory, bioactivity profiles, target exclusion, ChEMBL, kernel regression, quantitative structure--activity relationships}
+
+\maketitle
+
+\section{Introduction}
+Activity cliffs (ACs) are pairs of structurally similar compounds with large
+potency differences. They occupy the least smooth regions of a
+structure--activity landscape: a model may achieve a low average error while
+systematically smoothing away the local changes that medicinal chemists care
+about. \mace formalizes this problem with 30 target-specific regression
+datasets and separate errors for cliff and non-cliff molecules~\cite{moleculeace}.
+Graph encoders, molecular pretraining, and cliff-aware objectives improve the
+structural learner, but they continue to infer target-specific response mainly
+from ligand structure~\cite{scage,graphcliff,acanets}.
+
+Our starting point is that chemical identity and biological response answer
+different questions. Structure describes what a molecule is. Measurements
+against other targets and in other assays describe how that molecule has
+behaved across biological contexts. Such measurements cannot determine the
+current endpoint directly, but they can distinguish two chemically similar
+molecules whose functional profiles are different. This distinction is most
+valuable near a cliff, where structural proximity is least informative.
+
+Using external profiles creates an equally important statistical problem. A
+record for the benchmark target, or for the same protein under another name,
+would leak the answer. Sparse assay coverage can also turn chance correlations
+into apparently predictive features. We therefore formulate the method around
+target exclusion rather than unrestricted database reuse. For every benchmark
+target, the current protein and all biologically equivalent ChEMBL entities are
+removed before any profile is constructed. Profile coordinates,
+normalization, relevance selection, and kernel scales are then estimated only
+from the fitting fold.
+
+The resulting method, \method (Target-Excluded Activity Profile--Enhanced Regression),
+combines a collision-free multi-view chemical kernel with target- and
+assay-resolved activity-profile kernels. It is a single supervised regressor,
+not a cascade of a base model and a post-hoc correction. It neither averages
+neighbor labels nor stores model residuals. Our contributions are: (i) a
+target-excluded activity-profile formulation with explicit biological-identity
+control; (ii) a positive-semidefinite chemistry--profile kernel that represents
+both observation coverage and relative potency; (iii) repeated train-only
+evaluation, component restrictions, sensitivity analyses, and held-out case
+analyses on \mace that directly test the proposed mechanism. Low-coverage
+GraphCliff assays and ACNet matched-pair tasks are transfer checks that test
+the same response-memory principle under additional endpoints.
+
+\section{Related Work}
+The benchmark foundation is \mace, which shows that extended-connectivity
+fingerprints can outperform many graph models in low-data and cliff-heavy
+regimes~\cite{moleculeace}. ACNet instead frames cliff recognition as
+matched-molecular-pair classification~\cite{acnet}. SCAGE combines
+self-conformation-aware pretraining, functional-group tasks, and attention-based
+substructure interpretation~\cite{scage}. GraphCliff uses short--long-range
+gating to reduce graph oversmoothing~\cite{graphcliff}, whereas ACANet couples
+regression to a cliff-aware soft-margin triplet objective~\cite{acanets}. These
+methods improve how structure or structural differences are encoded.
+
+Bioactivity profiling provides a complementary representation: compounds are
+compared by patterns of measured response rather than by structure alone. Its
+use for held-out prediction, however, depends on assay overlap and explicit
+leakage control. Recent work shows that profile-based cliff prediction is
+sensitive to assay-neighborhood construction and that apparently transferable
+chemical transformations weaken after leakage is removed~\cite{bioactivityprofiles,kinasecliffs}.
+PrismNet provides a broader structural comparison by decomposing scaffolds,
+functional groups, and pharmacophores across 64 datasets~\cite{prismnet}.
+\method differs from both lines: it keeps the strong local inductive bias of
+chemical fingerprints, but conditions chemical similarity on a profile from
+which the evaluated biological endpoint has been explicitly removed.
+
+\section{Method}
+\subsection{Problem formulation and design principle}
+For each benchmark target $t$, the training set is
+$\mathcal{D}_t=\{(s_i,y_i)\}_{i=1}^{N_t}$, where $s_i$ is a canonical SMILES
+and $y_i$ is the measured $pK_i$ or $pEC_{50}$. Cliff annotations are used only
+to stratify the reported error; the proposed model never consumes them as
+features, weights, or auxiliary labels. We learn one target-specific function
+$f_t$ from a precomputed kernel. The design follows one hypothesis: two
+molecules are stronger analogues when they are similar in both chemical
+structure and target-excluded biological response. Every chemical vocabulary,
+profile statistic, relevance score, and kernel scale is estimated from the
+current fitting fold. Validation and test molecules are projected only through
+those frozen transformations.
+
+\subsection{Target-excluded activity profiles}
+Let the external activity archive be
+$\mathcal{A}=\{(m_k,e_k,a_k,v_k)\}_{k=1}^{N_{\mathcal A}}$, where $m_k$
+identifies a standardized molecule, $e_k$ a biological target entity, $a_k$ an
+assay, and $v_k$ a standardized potency measurement. For a benchmark target
+$t$, let $\mathcal{B}_t$ contain $t$ and every ChEMBL entity judged
+biologically equivalent to it. The admissible activity profile of a query
+molecule $q$ is
+\begin{equation}
+\mathcal{P}_t(q)=
+\{(e_k,a_k,v_k):(m_k=q)\land(e_k\notin\mathcal{B}_t)\}.
+\end{equation}
+The equality $m_k=q$ denotes exact standardized molecular identity; the method
+does not fetch labels from chemically similar compounds. We exclude entities
+sharing a UniProt accession, gene-symbol synonym, or normalized preferred name
+with the benchmark target. Repeated molecule--entity and molecule--assay
+measurements are aggregated by their median. If $\mathcal{P}_t(q)$ is empty,
+all profile coordinates are zero and prediction reduces to the chemical branch.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.98\textwidth]{figures/framework-cliff.png}
+\Description{Workflow of target-excluded response memory. A molecule's ChEMBL bioactivity profile is filtered to remove the prediction target, then combined with multi-view molecular representations and unified kernel regression to improve cliff-aware prediction.}
+\caption{Method overview. \method builds a target-excluded response memory by
+removing the prediction target and biologically equivalent targets from each
+molecule's external bioactivity profile. The resulting response vector is fused
+with multi-view chemical representations through a unified kernel and fitted by
+target-specific SVR. The final prediction uses response memory to distinguish
+structurally similar molecules that can have different activity near cliffs.}
+\label{fig:method}
+\end{figure*}
+
+\subsection{Collision-free multi-view chemistry}
+The chemistry branch deliberately retains the strong local-inductive bias of
+fingerprints. Let $\mathcal{G}$ denote a fixed collection of complementary
+environment generators spanning circular, feature-aware, and atom-pair
+descriptions at multiple resolutions. For each generator
+$g\in\mathcal{G}$, sparse integer environment identifiers are collected on
+the fitting molecules, avoiding collisions caused by folding environments into
+a fixed bit vector.  We construct both a binary vector $b_i^g$ and a count
+vector $c_i^g$.  With generalized Tanimoto similarity
+\begin{equation}
+T(x,x')=\frac{x^\top x'}{\lVert x\rVert_2^2+\lVert x'\rVert_2^2-x^\top x'},
+\end{equation}
+the multi-view chemical kernel is
+\begin{equation}
+K_{\mathrm{chem}}(i,i')=\frac{1}{2|\mathcal{G}|}\sum_{g\in\mathcal{G}}
+\left[T(b_i^g,b_{i'}^g)+T(c_i^g,c_{i'}^g)\right].
+\end{equation}
+An unseen environment in a held-out molecule has no fitting-vocabulary column,
+which is equivalent to an out-of-vocabulary zero and cannot alter training
+features.
+
+\subsection{Activity-profile representation}
+\paragraph{Coverage and potency geometry.}
+For profile feature $j$, $v_{ij}$ denotes molecule $i$'s external potency,
+and fitting-fold observations define its robust location $\mu_j$ and scale
+$\sigma_j$. We store an observation indicator
+$o_{ij}=\mathbb{1}[v_{ij}\ \text{observed}]$ and a centered response
+$z_{ij}=o_{ij}(v_{ij}-\mu_j)/\max(\sigma_j,\varepsilon_{\rm scale})$, where
+$\varepsilon_{\rm scale}>0$ prevents division by a vanishing scale. After row-wise
+$\ell_2$ normalization, a basic response kernel is
+\begin{equation}
+U(i,i')=\frac{\langle \bar{o}_i,\bar{o}_{i'}\rangle+
+\langle \bar{z}_i,\bar{z}_{i'}\rangle}{2}.
+\end{equation}
+The first term distinguishes shared experimental coverage from missingness;
+the second measures agreement in relative potency. We build $U_{\rm ent}$ at
+the target-entity level and $U_{\rm assay}$ at the assay level. Entity features
+pool measurements that address the same molecular target; assay features keep
+experimental contexts separate. Their complementarity is tested directly by
+removing either family from the final kernel.
+
+\paragraph{Fit-only relevance and dense views.}
+Many off-target columns are irrelevant. For every feature whose fitting support
+$n_j$ exceeds a prespecified minimum $n_{\min}$, we compute
+\begin{equation}
+w_j=\max\left(\operatorname{corr}(v_{\cdot j},y)^2-
+\frac{1}{n_j-1},0\right).
+\end{equation}
+Here $w_j$ is a finite-sample-corrected relevance score, and the correlation is
+computed only where feature $j$ is observed. The subtraction is the analytic
+null expectation of squared correlation and suppresses small-support
+coincidences. The $q_{\rm resp}$ highest positive $w_j$ values select
+target-level and assay-level dense views. Each selected view concatenates
+standardized potency and its observation indicator, then applies an RBF kernel.
+Its feature location, scale, and RBF bandwidth---the median positive fitting-pair
+squared distance---are all fitting-fold quantities.  Denote the resulting
+kernels by $D_{\rm ent}$ and $D_{\rm assay}$.
+
+Let $\mathcal{V}_{\rm prof}$ collect the sparse entity, sparse assay, dense
+entity, dense assay, and two chemistry--response interaction views. The
+complete activity-profile block is
+\begin{align}
+K_{\mathrm{prof}}=\frac{1}{|\mathcal{V}_{\rm prof}|}\big(&U_{\rm ent}+U_{\rm assay}
++D_{\rm ent}+D_{\rm assay}\nonumber\\
+&+K_{\rm chem}\odot D_{\rm ent}
++K_{\rm chem}\odot D_{\rm assay}\big),
+\end{align}
+where $\odot$ is the Hadamard product.  The two interaction terms require
+molecules to agree simultaneously in local chemistry and response behavior.
+
+\subsection{Chemistry--profile fusion and model fitting}
+Let $\mathcal{R}=\{\mathrm{chem},\mathrm{prof}\}$ index the two retained
+positive-semidefinite evidence blocks. They are fused as
+\begin{equation}
+K_{\boldsymbol{\lambda}}(i,i')=
+\sum_{r\in\mathcal{R}}\lambda_r K_r(i,i'),
+\qquad \lambda_r\geq0,\quad \sum_{r\in\mathcal{R}}\lambda_r=1.
+\end{equation}
+Here $K_r$ is the kernel contributed by representation block $r$, and $\lambda_r$ is
+its global mixture coefficient. The coefficients are fixed once using only the
+training-side component audit and are then shared by every target, split, and query;
+they are not target-adaptive quantities. Non-negative sums preserve positive
+semidefiniteness, and the Schur product theorem covers the Hadamard
+interactions. On $K_{\boldsymbol{\lambda}}$, a single
+$\epsilon$-insensitive support vector regressor solves
+\begin{equation}
+\min_{f\in\mathcal{H}_{K_{\boldsymbol{\lambda}}}}\frac{1}{2}
+\lVert f\rVert_{\mathcal{H}_{K_{\boldsymbol{\lambda}}}}^{2}
++C\sum_i\max\big(|y_i-f(s_i)|-\epsilon,0\big),
+\end{equation}
+where $\mathcal{H}_{K_{\boldsymbol{\lambda}}}$ is the reproducing-kernel Hilbert
+space, $C$ controls regularization, and $\epsilon$ defines the insensitive
+regression tube. Their fixed values and all preprocessing settings are reported
+in the experimental specification rather than encoded in the model equation.
+Training proceeds independently for each target and fitting fold. We first
+construct the collision-free chemical vocabulary, then compute the admissible
+profiles $\mathcal{P}_t$ and all fit-only profile statistics. The resulting
+training--training kernel is passed to one $\epsilon$-insensitive support vector
+regressor; there is no neural pretraining, epoch selection, or post-hoc
+correction model. At evaluation, we construct only the query--training
+cross-kernel with the frozen transformations and apply the learned support-vector
+coefficients. There is no per-target tuning, model ensemble, cliff reweighting,
+or validation/test-label feedback in the frozen model. The prediction is
+\begin{equation}
+\widehat y_q=b+\sum_{i\in\mathcal S}\alpha_i
+K_{\boldsymbol{\lambda}}\!\left(
+(q,\mathcal P_t(q)),(s_i,\mathcal P_t(s_i))\right),
+\end{equation}
+where $\mathcal S$ is the fitted support-vector set, $\alpha_i$ its learned
+coefficient for molecule $i$, and $b$ the intercept. Chemical similarity is
+contained in $K_{\boldsymbol{\lambda}}$ even though the compact notation shows
+the activity profile explicitly. The external archive supplies covariates;
+supervised endpoint activities enter only through the fitted regressor. Thus
+\method is one profile-conditioned predictor rather than a chemistry model
+followed by a residual or nearest-neighbor correction.
+
+For a molecule-level audit, we rank fitting molecules by the chemistry block
+$K_{\rm chem}(q,i)$. This ranking visualizes the structural neighborhood seen
+by the fitted kernel; no ranked label is copied or averaged during prediction.
+It allows us to ask whether activity profiles correct cases in which chemical
+neighbors alone imply the wrong local trend.
+
+\paragraph{Falsifiable mechanism.}
+The activity-profile hypothesis makes four testable predictions. First,
+adding a target-excluded profile should improve the identical chemistry
+predictor under repeated held-out splits. Second, entity-level response,
+assay-level context, sparse coverage, dense potency, and chemistry--profile
+agreement should carry complementary information. Third, the gain should
+disappear when the same profile rows are randomly reassigned to other
+molecules, because that preserves dimensionality and coverage while removing
+molecule-specific biological information. Fourth, improvement should include
+cases in which the closest structural labels are misleading; otherwise the
+method would be only a more elaborate expression of chemical similarity. The
+Results section tests these predictions primarily within \mace, using repeated
+splits, restricted representations, profile controls, sensitivity analyses, and
+molecule-level cases.
+
+\input{tables/dataset_summary.tex}
+\input{tables/cross_dataset_macro.tex}
+
+\section{Experimental Protocol}
+\paragraph{Primary regression benchmark.}
+We use all 30 official \mace targets and preserve the byte-level train/test
+split. Model specification is performed only inside the official training pool.
+We first compare restricted activity-profile representations and directly remove the
+chemistry--response interaction under a stratified five-fold split. Candidate
+branches without paired evidence are discarded, after which we repeat the
+frozen minimal model under two additional split seeds. Every profile statistic,
+relevance score, chemical vocabulary,
+and kernel scale is re-estimated inside the fitting fold. Uncertainty is
+computed by resampling targets rather than treating folds as independent.
+
+\paragraph{Profile identity and leakage controls.}
+The response-profile shuffle control keeps the same molecule set, selected
+profile coordinates, feature dimensionality, coverage distribution, profile
+value distribution, and kernel construction. Within each fitting fold and its
+validation partition, complete profile rows are randomly reassigned across
+molecules before the profile kernels are recomputed and fused with the
+unchanged chemical kernel. The only destroyed information is therefore the
+identity link between a molecule and its own external biological-response
+profile. For the leakage stress test, we deliberately re-inject the current
+benchmark endpoint into the external archive for the official-training
+molecules, then compare strict biological exclusion, normalized target-name
+exclusion, and no exclusion under the same folds. The no-exclusion condition is
+intentionally contaminated and is used only to quantify how much apparent
+performance can be created by endpoint leakage.
+
+\paragraph{Supplementary transfer checks.}
+The paper is centered on \mace. We additionally report five low-coverage
+GraphCliff assays as an external stress test for profile transfer and an ACNet
+matched-pair classification appendix as an orthogonal edit-information check.
+These secondary collections do not define the method, do not share the primary
+metric, and are not pooled with the \mace regression evidence.
+
+\paragraph{Confirmation and audit status.}
+After the train-only specification is frozen, the final artifact is refit on
+all official training rows and evaluated on the official test partition. Since
+earlier component audits had already inspected this test resource, we do not call it
+a pristine lockbox; the repeated train-only CV remains the primary
+generalization evidence. Crucially, official-test results are not used to add,
+remove, or reweight a component.
+
+\paragraph{Post-fit case selection.}
+Case studies are illustrative and selected only after the model is frozen;
+they are not estimates of a representative effect. We define sparse, moderate,
+and dense response coverage as one to two, three to seven, and at least eight
+observed response features. Eligible official-test queries are cliff molecules
+with at most 30 heavy atoms, positive error reduction, and nearest-chemistry
+similarity of at least $0.65$. Within each stratum we select the largest error
+reduction and use dataset identifier and SMILES as deterministic tie breaks.
+The two fitting molecules with highest $K_{\rm chem}$ are then displayed.
+Test labels are used only for this post-fit selection and visualization.
+
+The reproduced official ECFP-SVM is the primary historical baseline, and the
+collision-free binary+count kernel is the strongest same-regressor, same-split
+chemistry control. Table~\ref{tab:main} is restricted to the main \mace
+regression benchmark. It includes locally refitted ECFP baselines, Chemprop,
+the strongest local GINE variant, and GraphCliff. Every architecture retained
+in this primary panel is rerun under the same external GraphCliff protocol;
+literature-only ImageMol, GEM, SCAGE, and MTPNet values are not mixed into the
+local comparison. The vendored MoleculeACE AFP, CNN, GAT, GCN, and MPNN
+architectures are additionally run on the external assays. The
+per-target Table~\ref{tab:moleculeace_all} provides the detailed local
+five-fold comparison for every locally run MoleculeACE method. The like-for-like
+local baseline audit is summarized separately in
+Table~\ref{tab:local-cv-significance} and
+Figure~\ref{fig:local-baseline-significance}.
+
+\input{tables/moleculeace_all_results.tex}
+
+\section{Results}
+\subsection{Target-excluded profiles improve the same chemical predictor}
+Across three independently shuffled five-fold splits, the chemistry baseline
+has macro RMSE $0.6428$, cliff RMSE $0.7380$, and non-cliff RMSE $0.5854$.
+\method reaches $0.5913$, $0.6693$, and $0.5437$, reductions of $8.01\%$,
+$9.32\%$, and $7.13\%$. The per-seed overall reductions are $7.97\%$,
+$7.99\%$, and $8.08\%$; the conclusion is therefore insensitive to the split
+seed. Across all 450 paired folds, target-clustered
+bootstrap intervals for the absolute reduction are $[0.0372,0.0678]$ overall
+and $[0.0465,0.0953]$ on cliffs. Target-averaged paired tests give
+$p<2\times10^{-8}$ for both endpoints. The improvement is positive for 29/30
+targets overall and 27/30 targets on cliffs after averaging seeds.
+
+The official-test confirmation gives RMSE $0.5687$ overall, $0.6377$ on cliffs,
+and $0.5266$ on non-cliffs. Against the reproduced official ECFP-SVM, these are
+reductions of $15.3\%$, $15.1\%$, and $15.6\%$. Because the resource had been
+inspected in earlier component audits, we treat this as confirmation and base the
+central claim on repeated training-only CV.
+
+Under the local five-fold audit in Table~\ref{tab:moleculeace_all}, \method has
+lower overall RMSE than the strongest locally evaluated baseline on 28 of 30
+targets after averaging folds within each target. The mean paired gain against
+this per-target best local baseline is $0.0766$ RMSE. Relative to the strongest
+baseline by macro average, ECFP-SVM ($0.6733$), \method reaches $0.5927$, an
+$11.9\%$ reduction. The two local exceptions are CHEMBL2047\_EC50 and
+CHEMBL228\_Ki.
+
+\input{tables/local_baseline_significance.tex}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.96\textwidth]{figures/fig_local_baseline_significance.pdf}
+\Description{Horizontal bars compare locally fitted baselines and TAPER on overall and cliff RMSE. Error bars show target-level standard deviations and annotations report paired target-level significance against TAPER.}
+\caption{Like-for-like local five-fold comparison on all 30 MoleculeACE
+targets. Bars and error bars denote the target mean and standard deviation
+after folds are averaged within each target. Annotations give one-sided paired
+Wilcoxon $P$ values for the hypothesis that the corresponding baseline has
+higher target-level error than \method. Values are Holm-adjusted across the
+displayed baselines, and folds are not treated as independent replicates.}
+\label{fig:local-baseline-significance}
+\end{figure*}
+
+The fully local audit asks a stricter question: after all baselines are run
+under the same five-fold protocol, does \method still beat the best baseline
+available for each target rather than only a fixed reference method? It does.
+Relative to the per-target best local baseline, \method reduces target-mean
+RMSE by $0.0766$ overall, $0.0699$ on cliff molecules, and $0.0701$ on
+non-cliff molecules. The corresponding win counts are 28/30, 27/30, and 27/30.
+The profile-evidence analysis is intentionally conservative: the number of
+positive response-profile coordinates has a positive association with
+cliff-RMSE gain ($\rho=0.34$), but this remains a trend rather than a
+standalone claim ($p=0.066$). The stronger conclusion comes from the paired
+gain distribution and the component-level restrictions below.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.96\textwidth]{figures/fig_baseline_advantage_analysis.pdf}
+\Description{Panel a shows target-level RMSE gains of TAPER over the strongest local baseline for overall, cliff, and non-cliff molecules. Panel b summarizes mean paired gains with target-bootstrap intervals and target win counts. Panel c relates cliff gain to the number of positive response-profile coordinates.}
+\caption{Where the local advantage over baselines comes from. For every target
+and endpoint, the comparison baseline is the strongest locally refit baseline
+on that target after folds are averaged. Panel (a) shows paired target-level
+gain distributions. Panel (b) reports the mean paired gain with 95\%
+target-bootstrap intervals and win counts. Panel (c) tests whether targets with
+more positive response-profile coordinates tend to obtain larger cliff gains;
+the positive association is suggestive but not significant at the conventional
+5\% level.}
+\label{fig:baseline-advantage}
+\end{figure*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\linewidth]{figures/fig_inference_efficiency.pdf}
+\Description{Scatter plot of locally evaluated MoleculeACE methods with overall RMSE on the x-axis and cliff RMSE on the y-axis. Each method has a distinct marker shape and is directly labeled. TAPER lies in the lower-left region.}
+\caption{Local baseline error trade-off on MoleculeACE. Each point is one
+locally evaluated method after folds are averaged within targets and then
+macro-averaged over the 30 targets. The horizontal axis shows overall RMSE and
+the vertical axis shows cliff RMSE; the lower-left region is better. Marker
+shape distinguishes methods, and direct labels replace method-family legends.
+Only locally run methods are included.}
+\label{fig:efficiency}
+\end{figure}
+
+The local scatter makes the baseline relationship explicit. The strongest
+classical baseline is ECFP-SVM, whereas the locally refitted graph baselines are
+substantially less competitive under this low-data cliff benchmark. \method is
+the only method in the lower-left region, showing simultaneous improvement on
+overall and cliff RMSE rather than a trade-off between the two endpoints.
+
+\subsection{Entity, assay, coverage, and potency views are complementary}
+Table~\ref{tab:ablation} and Figure~\ref{fig:ablation} restrict the
+activity-profile representation under one five-fold split while keeping the
+regressor and chemistry branch unchanged. Entity aggregation pools measurements
+that address the same biological target; assay aggregation preserves
+experimental context. Sparse views compare observed coverage and relative
+response directly, whereas dense views first select fitting-fold coordinates
+that carry reproducible endpoint information. Chemistry combined with either
+entity or assay profiles is weaker than their joint representation; likewise,
+dense or sparse response geometry alone is weaker than their combination.
+Restricting the external profile to protein-sequence neighbors changes overall
+RMSE from $0.5928$ to $0.5927$ and therefore earns no place in the final model.
+The literal leave-one-block-out comparison removes chemistry--profile
+interactions; doing so
+increases overall RMSE by $0.0032$ (25/30 target-level increases; one-sided
+Wilcoxon $p=2.5\times10^{-5}$) and cliff RMSE by $0.0021$ (18/30 increases;
+$p=0.060$). Thus the interaction has reproducible support on the overall
+endpoint, while its cliff-specific effect remains uncertain. The larger
+restricted-view gaps show that no single profile geometry substitutes for
+the complete representation.
+
+\begin{table}[t]
+\centering
+\caption{Activity-profile representations on 30 targets (five-fold CV). Lower
+is better. Every row uses the same regressor and chemistry branch; the first
+row omits external activity profiles.}
+\label{tab:ablation}
+\footnotesize
+\begin{tabular}{lccc}
+\toprule
+Retrieval strategy & Overall & Cliff & Non-cliff\\
+\midrule
+Chemistry only & 0.6440 & 0.7417 & 0.5855\\
+Dense profiles only & 0.6127 & 0.6959 & 0.5615\\
+Assay-level profiles only & 0.6052 & 0.6884 & 0.5552\\
+Entity-level profiles only & 0.6032 & 0.6853 & 0.5529\\
+Sparse profiles only & 0.6072 & 0.6904 & 0.5583\\
+No chem.--profile interaction & 0.5959 & 0.6749 & 0.5482\\
+\textbf{Hybrid sparse+dense, entity+assay} & \textbf{0.5927} & \textbf{0.6727} & \textbf{0.5443}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.82\textwidth]{figures/fig_component_ablation.pdf}
+\Description{Horizontal box plots show target-level overall and cliff RMSE penalties for chemistry alone, four restricted chemistry-plus-profile representations, and one interaction removal, each compared with complete TAPER.}
+\caption{Penalty of restricted representations relative to the complete model
+(30 target-level paired differences). Boxes show medians and interquartile
+ranges, whiskers extend to $1.5$ times the interquartile range, and translucent
+points show individual targets. The combined response representation
+outperforms each restricted view. Removing the chemistry--response interaction
+gives a small overall penalty; its cliff-specific target-level test remains
+inconclusive.}
+\label{fig:ablation}
+\end{figure*}
+
+The same audit removes attractive but unsupported complexity. Protein-sequence
+nearest-neighbor views do not improve any endpoint; a local physical kernel has
+a sub-percent, non-significant overall effect ($p=0.13$); and the susceptibility
+extension does not significantly improve cliff error. These branches are not
+part of \method and remain documented only as negative controls.
+
+\subsection{Supplementary transfer check: low-coverage external assays}
+On five newly standardized, low-coverage GraphCliff assays, the unchanged model
+reduces macro RMSE from $0.5558$ to $0.5299$ ($4.66\%$) and cliff RMSE from
+$0.6445$ to $0.5957$ ($7.58\%$). Non-cliff RMSE worsens by $3.31\%$, identifying
+sparse response coverage as a real boundary rather than hiding it in the
+average. Among the locally refit graph encoders, NodeNorm GINE is strongest
+overall on these assays (RMSE $0.798$), but remains behind both the linear ECFP
+control and \method; this is consistent with the very small per-assay fitting
+pools rather than evidence that a larger graph encoder is automatically useful.
+
+As a second cliff-focused stress test, we locally ran two-fold evaluation on
+the dopamine D2, factor Xa, and SARS-CoV-2 Mpro collections released by
+Dablander et al. A calibrated matched-molecular-pair correction improves the
+ECFP-SVM on every dataset: the cross-dataset overall RMSE changes from
+$0.6982$ to $0.6896$, while cliff RMSE changes from $0.9787$ to $0.9584$.
+This experiment supports transferable local edit information, but is kept
+separate from the activity-profile claim because it neither uses target-excluded
+profiles nor evaluates the complete \method model.
+
+\input{tables/dablander_external.tex}
+
+\input{tables/external_all_results.tex}
+
+\subsection{Response-memory transfer to matched-pair classification}
+ACNet tests the same central claim in a pair-classification form: activity
+cliffs are better modeled when the predictor represents not only two molecular
+endpoints, but also the local response induced by the edit between them. We
+therefore instantiate a task-specific \method{}-edit model by combining endpoint
+fingerprints with an explicit chemical-edit memory. On all 190 ACNet target
+tasks, this \method{}-edit variant raises target-macro
+ROC--AUC from $0.9334$ to $0.9490$, average precision from $0.6961$ to $0.7529$,
+and accuracy from $0.9345$ to $0.9483$. Target-bootstrap 95\% intervals for the
+paired gains exclude zero for ROC--AUC ($[0.0094,0.0225]$), average precision
+($[0.0406,0.0736]$), and accuracy ($[0.0089,0.0187]$); the corresponding
+win/tie/loss counts are $103/64/23$, $104/66/20$, and $112/64/14$. This result
+supports the broader response-memory hypothesis under a different endpoint:
+local biological or edit responses provide information that endpoint structure
+alone misses. The strongest refit graph-pair baseline, PairNorm GINE, reaches
+ROC--AUC $0.769$ and average precision $0.351$, showing that the ACNet gain is
+not explained by replacing endpoint fingerprints with a graph encoder.
+
+\input{tables/acnet_local_macro.tex}
+
+\subsection{Sensitivity identifies the useful profile regime}
+Figure~\ref{fig:sensitivity} varies one internal parameter at a time while
+retaining the complete model. Expanding the fit-selected dense-response budget
+from one to ten coordinates reduces cliff RMSE from $0.6825$ to
+$0.6727$ and overall RMSE from $0.5965$ to $0.5927$, with the latter saturating
+after eight coordinates. Thus several complementary response coordinates are
+more useful than one selected assay. Performance is nearly invariant to a
+four-fold contraction or expansion of the median-derived dense-kernel
+bandwidth. The profile mixture has a broad useful region: intermediate weights
+remain near the minimum, whereas overweighting the external profile degrades
+both endpoints. Finally, a small SVR penalty underfits sharply; performance
+improves up to the fixed setting and then plateaus. Thus profile dimensionality,
+evidence balance, and predictor regularization materially affect the result,
+while dense-view bandwidth is comparatively insensitive.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.82\textwidth]{figures/fig_sensitivity.pdf}
+\Description{Four line plots show overall and cliff RMSE as the response-coordinate budget, dense-kernel bandwidth, profile mixture weight, and SVR penalty are varied one at a time.}
+\caption{One-parameter-at-a-time sensitivity of the complete \method model.
+Panels vary (a) the number of fit-selected response coordinates, (b) the
+dense-response RBF bandwidth relative to its fitting-fold median, (c) the
+profile coefficient in chemistry--profile fusion, and (d) the SVR
+penalty. Points are means over 30 target-level five-fold averages; shaded bands
+are 95\% target-bootstrap intervals. Orange rings and vertical dashed lines mark
+the fixed manuscript setting. Every model component remains active throughout;
+within each panel, only the named parameter changes.}
+\label{fig:sensitivity}
+\end{figure*}
+
+\FloatBarrier
+
+\subsection{Cold-start coverage, retrieval controls, and discovery ranking}
+We first replaced the released random-like partition with one fixed 80/20
+Bemis--Murcko scaffold split for each of all 30 targets. No scaffold is shared
+between fitting and held-out molecules. The held-out scaffold uses only the
+archived, target-excluded profile records available under this protocol; thus a
+molecule without such a record receives zero response memory rather than a
+profile inferred from its structural neighbors. Under this stricter split,
+the locally refit GINE+NodeNorm graph baseline has macro overall/cliff RMSE
+$0.876/0.968$ and the chemistry-only kernel has $0.732/0.819$, while \method
+reaches $0.701/0.769$ (a $4.3\%/6.1\%$ reduction from the chemistry kernel).
+The absolute performance drop relative to the released split is expected, but
+the retained paired improvement shows that the response memory is not
+restricted to the original molecular split.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.80\textwidth]{figures/fig_scaffold_coldstart.pdf}
+\Description{Paired target-level overall and cliff RMSE values for ECFP-SVM, locally refit GINE+NodeNorm, and TAPER under 30 independently scaffold-disjoint splits.}
+\caption{Scaffold-disjoint cold-start evaluation. Each line is one target under
+a fixed 80/20 Bemis--Murcko split; points are target-level errors and black
+segments join macro means. The test scaffold cannot obtain a profile by
+structural-neighbor imputation.}
+\label{fig:scaffold-coldstart}
+\end{figure*}
+
+We next stress-tested the response-memory claim on the frozen official-test
+predictions rather than changing the model after seeing the labels.  Splitting
+test molecules by the number of external response records gives a clear
+cold-start boundary: with no record, overall RMSE is $0.600$ versus $0.650$
+for ECFP-SVM, whereas the cliff subset is $0.710$ versus $0.789$.  The gain
+persists with one record ($0.061$ mean absolute-error reduction) and two to
+three records ($0.069$), and reaches $0.167$ above ten records (target-cluster
+bootstrap intervals are stored with the analysis).  These are post-hoc
+coverage strata, not a new split or a claim that coverage is randomly
+assigned; they quantify the expected cold-start cost of exact-identity memory.
+
+The result is not explained by a single nearest-response lookup.  Among the
+7,164 test molecules with at least one response record, the mean absolute-error
+gain remains positive in every quartile of nearest-response similarity
+($0.063$--$0.110$).  The profile-only quantities are therefore useful
+diagnostics of evidence availability, while the final prediction still uses
+the full chemistry--profile kernel and all training molecules.
+
+As a formal control, we also ran the profile-only and late-fusion kernels on
+all 30 targets with the same fit-only vocabulary and biological exclusion.
+The response-only kernel is weak (macro RMSE $0.969$, cliff RMSE $1.038$),
+whereas adding response coverage to chemistry gives $0.628/0.715$ and adding
+the potency-residual profile gives $0.620/0.702$ (overall/cliff RMSE).  The
+combined off-target profile fusion reaches $0.609/0.692$, demonstrating that
+the gain comes from a complementary profile--chemistry representation rather
+than from retrieval alone.
+
+We made the retrieval control explicit on the same 30 target-held-out splits.
+Profile-$k$NN retrieves the five closest response profiles and averages their
+training activities; profile kernel ridge regression (KRR) uses only the
+target-excluded response-profile kernel; and a fixed equal late fusion averages
+the ECFP-SVM and profile-KRR predictions.  These profile-only controls are
+substantially weaker (macro RMSE $1.049$ for $k$NN and $1.134$ for KRR) than
+ECFP-SVM ($0.640$); fixed late fusion is also worse ($0.776$).  This controls
+the alternative explanation that performance is caused by a nearest-profile
+lookup or by appending an otherwise generic profile predictor.  In contrast,
+the jointly constructed response kernel improves the chemistry kernel
+($0.609$ versus $0.640$).
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.78\textwidth]{figures/fig_profile_retrieval_controls.pdf}
+\Description{Target-level overall and cliff RMSE distributions for ECFP-SVM, profile k-nearest-neighbor retrieval, profile kernel ridge regression, and their fixed prediction-level late fusion.}
+\caption{Explicit retrieval controls. Each point is one target under the same
+official split and target-exclusion protocol. Profile-only $k$NN and KRR, and
+a fixed late fusion of ECFP-SVM with KRR, do not reproduce the performance of
+the integrated response kernel. Horizontal bars are target-macro means.}
+\label{fig:profile-retrieval-controls}
+\end{figure*}
+
+\subsection{Causal dose, temporal, and biological-radius controls}
+Natural response coverage is confounded by compound history: molecules with
+many recorded assays need not be equally difficult.  We therefore performed a
+within-molecule dose experiment.  For each target, we retained only the same
+official-test molecules with at least 16 target-excluded assay records, froze
+the training-side kernel and SVR, and randomly kept $0,1,2,4,8$, or 16 records
+per molecule for 20 independent masks.  Structures, prediction targets, and
+test molecules do not change.  Across the 15 targets with sufficient rich
+cliff/non-cliff subsets, both overall and cliff performance improve
+monotonically as records are restored: the target-macro overall/cliff RMSE
+reduction relative to chemistry changes from $-0.199/-0.246$ with no record
+to $0.015/0.005$ with 16 records.  This is a causal manipulation of memory
+availability, rather than an observational coverage stratification.  The
+restricted rich cohort does not show a positive plateau by 16 records; we
+therefore interpret it as evidence for a dose-dependent recovery, not a claim
+that memory is already saturated.
+
+The previous manipulation freezes the fitted model and changes only query-side
+memory.  We therefore performed a stricter matched train/test experiment in
+which both partitions were restricted to the same high-coverage molecules and
+were independently masked at every dose before rebuilding the kernel and
+refitting the SVR.  Labels, structures, molecule identities, and the official
+split were fixed.  Across 13 targets that retained both cliff classes at all
+doses, the reduction is numerically zero at dose zero ($-0.000/-0.001$ for
+overall/cliff RMSE) and increases to $0.066/0.068$ at 16 records per molecule
+(20 masks per dose).  Thus the dose response is not an artifact of keeping a
+fully observed training representation while only manipulating test queries.
+
+We also separated biological potency from the history of which assays were
+observed.  Under strict exclusion on all 30 targets, we held every
+molecule--response-coordinate observation mask fixed and deterministically
+permuted only observed potency values within each coordinate.  This preserves
+coverage, dimensionality, coordinate-wise value distributions, and the full
+kernel construction, while destroying molecule-specific biological responses.
+The true profiles achieve $0.568/0.638$ overall/cliff RMSE, whereas the
+fixed-mask potency shuffle gives $0.620/0.707$.  The loss after shuffling
+therefore rules out an explanation based solely on assay-history width or an
+additional feature channel.
+
+We next asked whether the profile merely contains a near-duplicate target.
+On all 30 released test targets, we successively removed target-equivalent
+records, sequences with at least 80\% identity, sequences with at least 50\%
+identity, and all targets sharing an InterPro/Pfam/PANTHER protein-family
+identifier.  Overall/cliff RMSE remains $0.568/0.638$ after the 80\% radius,
+changes to $0.589/0.671$ after the 50\% radius, and is $0.623/0.719$ after
+the family-level exclusion.  Thus the strongest signal is not explained by an
+80\%-identical proxy, although the family-level loss shows that related
+biology is genuinely useful information rather than irrelevant extra width.
+
+That family-level degradation could still arise merely because family exclusion
+removes many more records.  For each target we consequently created ten
+seeded random target-exclusion sets on top of strict exclusion, selecting
+whole response coordinates to match the family-only deletion count.  The
+entity-plus-assay record-count mismatch is at most one record (mean 0.003).
+Count-matched random exclusion yields $0.603/0.690$ overall/cliff RMSE,
+whereas the actual family exclusion yields $0.623/0.719$.  Related biological
+responses are therefore specifically informative: deleting the same quantity
+of unrelated response history is materially less harmful.
+
+The same-external-data-budget controls make this distinction explicit.  Every
+baseline receives the same ECFP, response-observation mask, and standardized
+response vector; the full vector is compressed by a label-free fit-only random
+projection for the RBF-SVM.  Concatenated RBF-SVM reaches $0.625/0.673$ and
+train-only tuned late fusion reaches $0.634/0.707$, whereas the integrated
+response kernel reaches $0.568/0.638$ (overall/cliff RMSE).  Hence response
+memory itself contains information, but joint chemistry--response geometry
+extracts more of it than concatenation or a tuned prediction-level blend.
+
+Finally, we constructed a dated ChEMBL audit on the predeclared CHEMBL244
+target.  For 3,097 molecules with a benchmark document year, each response
+record was retained only if its document year was no later than that molecule's
+benchmark measurement.  On the 621 held-out dated molecules, chemistry-only
+RMSE is $0.648$; the complete archive and pre-measurement profiles give
+$0.624$ and $0.623$, respectively (cliff RMSE $0.709$ and $0.711$ versus
+$0.746$).  This single-target date-verified subset cannot establish a general
+prospective claim, but it directly rules out a purely future-document
+explanation for this observed transfer gain.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.94\textwidth]{figures/fig_memory_robustness.pdf}
+\Description{A six-panel figure shows matched train-test response-record dose response, a fixed observation-mask potency shuffle, family versus count-matched random biological exclusion, equal-data-budget baselines, widening biological exclusion radius, and a document-year temporal profile cutoff.}
+\caption{Robustness controls for the response-memory claim. (a) The same rich
+train and test molecules are independently masked at every dose before the
+kernel is rebuilt and the SVR is refit; intervals are target-bootstrap 95\%
+intervals over 13 matched targets. (b) Potency values are shuffled within a
+response coordinate while every molecule-coordinate observation is retained.
+(c) Family exclusion is compared with whole-target random exclusions that
+match the deleted response-record count. (d) Each competing baseline receives
+the same response records, masks, and standardized response values; points are
+30 target-level cliff errors. (e) Wider sequence and family exclusion removes
+possible target proxies. (f) A dated CHEMBL244 subset uses only response
+documents available no later than each molecule's benchmark measurement.}
+\label{fig:memory-robustness}
+\end{figure*}
+
+Finally, we evaluated a fixed early-discovery ranking protocol on every target:
+the top $10\%$ of observed test potency defines hits, and scores are ranked
+without using those labels.  The locally trained Chemprop comparator has macro
+EF1\%/ROC--AUC/BEDROC-like values of $7.33/0.888/0.259$; ECFP-SVM gives
+$8.12/0.910/0.283$, and \method gives $8.75/0.935/0.313$.  Improvements are
+not universal at the individual-target level, so these values are reported as
+a discovery-oriented retrospective ranking check rather than as a claim of a
+prospective screen.
+
+We also performed a strict ChEMBL-to-BindingDB transfer test.  For each
+MoleculeACE target, the regressor was fit only on its released ChEMBL training
+partition and evaluated on BindingDB molecules absent from that partition.
+All BindingDB systems biologically equivalent to the prediction protein,
+including the systems supplying the external labels, were removed before the
+response profile was constructed.  Across 26 targets with sufficient external
+data (7,941 unseen molecules), the frozen $10{:}8$ chemistry--response kernel
+reduces macro RMSE from $0.928$ to $0.916$ and cliff RMSE from $1.248$ to
+$1.221$.  Only $17.8\%$ of external molecules have an observed retained
+response coordinate, so this is a deliberately sparse, no-recalibration
+transfer test rather than a database-specific re-tuning exercise.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.94\textwidth]{figures/fig_extended_evidence.pdf}
+\Description{Four panels show response-memory coverage scaling, gain by nearest-response similarity quartile, virtual-screening enrichment, and the relation between response-coordinate availability and external cross-validation error.}
+\caption{Extended evidence from frozen local runs. (a) Overall and cliff RMSE
+by exact-identity response coverage; (b) positive absolute-error gain across
+nearest-response similarity quartiles, showing that the method is not a single
+nearest-neighbor label transfer; (c) target-macro early-discovery ranking
+metrics; and (d) external cross-validation RMSE as a function of the number of
+fit-derived response coordinates. All statistics are computed from stored
+predictions or training-fold summaries; no test label is used for model
+selection.}
+\label{fig:extended-evidence}
+\end{figure*}
+
+\input{tables/extended_cases.tex}
+
+\FloatBarrier
+
+\subsection{What biological response dimensions are selected?}
+To make the response memory biologically auditable, we annotated the
+fit-selected assay coordinates using the cached ChEMBL preferred names across
+the two repeated-CV runs. Receptor-associated coordinates account for 1,092
+selection events, kinases for 428, enzymes for 112, ion channels for 75, and
+transporters for 51; 891 events remain in a deliberately broad ``other''
+category that includes non-protein and incompletely annotated ChEMBL targets.
+The most recurrent individual coordinates include the mu opioid receptor,
+5-hydroxytryptamine receptors 1E and 1D, PPAR$\gamma$, CYP2C9/CYP2D6, KCNH2,
+and CAMK1D. Thus the memory is pharmacological rather than a single assay
+modality. This frequency analysis describes what the fit-only relevance
+procedure selects; it is not a causal statement that any one off-target
+explains a potency measurement.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.80\textwidth]{figures/fig_response_biology.pdf}
+\Description{Bar plots show pharmacological-family counts and the most frequently selected ChEMBL response coordinates across repeated target-fold runs.}
+\caption{Biological annotation of fit-selected response coordinates. (a) Counts
+by conservative preferred-name category; (b) the most frequently selected
+individual ChEMBL target coordinates. Selection is performed within the fitting
+fold after prediction-target exclusion.}
+\label{fig:response-biology}
+\end{figure*}
+
+\FloatBarrier
+
+\subsection{Activity profiles resolve misleading structural neighborhoods}
+Response coverage is a candidate explanation, not a universal guarantee. Across
+the 30 targets, the association between the number of informative response
+features and cliff-RMSE reduction is positive but inconclusive
+($\rho=0.25$, bootstrap 95\% CI $[-0.18,0.63]$, $p=0.18$). Across a complete
+leave-one-target-out sensitivity analysis, $\rho$ ranges from $0.17$ to $0.36$.
+The largest-gain target is CHEMBL4203, but the observations do not justify a
+fitted coverage--gain trend.
+
+Across all 9,802 official-test molecules, the median absolute-error reduction
+is $0.0506$; among 3,790 cliff molecules it is $0.0601$. The displayed partner
+examples are selected after model freezing and are not representative effect
+estimates. We select the largest positive cliff rescue with at most 30 heavy
+atoms in each of three predeclared response-coverage strata, then display the
+two most similar official-training molecules under $K_{\rm chem}$.
+Separately, the machine-readable extended-case corpus contains the largest
+rescue and largest penalty for every one of the 30 targets (60 held-out
+molecules in total), along with structure, response-record count, structural
+and response similarity, and all three local predictions. Table~\ref{tab:extended-cases}
+shows a compact deterministic subset; the full corpus is retained without
+post-hoc filtering.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.98\textwidth]{figures/fig_retrieval_cases.pdf}
+\Description{Three held-out activity-cliff queries, each beside its two closest official-training molecules under the frozen chemistry kernel. A monochrome dot-line comparison gives absolute error for ECFP-SVM and TAPER.}
+\caption{Post-fit structural-neighborhood cases. Each row shows one held-out
+query, its two closest official-training molecules under frozen
+$K_{\rm chem}$, and the change in absolute error from ECFP-SVM to \method.
+Molecules are aligned to the query and rendered in monochrome. The displayed
+neighbors explain the chemistry-only context; their labels are not transferred
+by \method.}
+\label{fig:retrieval-cases}
+\end{figure*}
+
+The cases expose why response context helps. For CHEMBL4792, the two closest
+training analogues have activities $7.28$ and $6.30$, while the difluoro query is
+$5.30$; the smooth ECFP-SVM stays high at $6.91$, whereas \method predicts
+$5.41$. For CHEMBL219, neighbor activities $5.82$ and $6.02$ bracket the query
+at $5.96$, but ECFP-SVM predicts $7.38$ and \method $5.84$. The sharpest
+counterexample to label transfer is CHEMBL262: both structural analogues are
+potent ($8.30$ and $7.80$), yet the query is $6.00$. Chemistry alone predicts
+$7.28$; the dense activity-profile view moves the estimate to $6.03$. Thus the
+gain is not nearest-label copying: chemistry locates the local neighborhood,
+while cross-context response geometry determines whether its apparent
+smoothness should be trusted.
+
+\FloatBarrier
+
+\section{Discussion and Limitations}
+The central result supports a specific representation principle: chemical
+structure and target-excluded activity profiles contain complementary
+information near activity cliffs. Physical descriptors, sequence-selected
+profile neighborhoods, and an explicit susceptibility channel do not earn
+their complexity and are excluded from the final model. This negative evidence
+matters because the gain cannot be attributed to indiscriminate feature
+addition. Equation~(6) therefore uses only a global chemistry--profile mixture,
+shared across targets, splits, and queries, with strict biological exclusion
+applied before every profile is constructed.
+
+Five limitations matter. First, external-response availability is not random;
+well-studied compounds and targets have denser profiles. Second, the BindingDB
+transfer covers 26 exact-protein target sets but is still retrospective and
+does not establish prospective assay performance. Third, SCAGE, GraphCliff, ACANet, and PrismNet do not all
+publish identical splits or aggregations, so their table entries are contextual
+rather than the basis of our central claim.
+Fourth, our method uses additional ChEMBL measurements; a fully controlled
+leaderboard should equalize external-data budgets. The 190 ACNet tasks increase
+breadth only for the edit-representation hypothesis and must not be pooled with
+regression RMSE. Fifth, exact-identity profile assignment means that an unseen
+compound with no ChEMBL record receives no external response information; the
+present model does not infer a profile from similar molecules. The
+scaffold-disjoint evaluation shows a retained advantage under this conservative
+condition, but does not remove the coverage limitation or replace a prospective
+new-compound study.
+
+\section{Conclusion}
+\method tests whether activity measured outside the prediction target can make
+chemical similarity more informative without leaking the endpoint. Across
+repeated MoleculeACE splits, target-excluded entity and assay profiles improve
+the same collision-free chemical regressor, with the largest absolute reduction
+on cliff molecules. Shuffle controls show that the gain requires
+molecule-specific response identity, and deliberate leakage controls show why
+strict biological exclusion is required. The MoleculeACE
+restricted-representation analyses and held-out cases support one explanation:
+structure locates a chemical neighborhood, whereas cross-context response
+distinguishes molecules that the neighborhood would otherwise smooth together.
+The method remains dependent on external profile availability and does not solve
+cliffs for compounds absent from the archive. These boundaries make
+target-excluded activity profiling a testable MoleculeACE-grounded
+representation principle rather than a universal substitute for structural or
+interaction-based modeling.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\clearpage
+\onecolumn
+\appendix
+\begin{landscape}
+\section{All ACNet target results}
+Table~\ref{tab:acnet_all} reports the held-out ROC--AUC for every matched-pair
+task. It is included to expose the full positive, tied, and negative target
+distribution rather than only the macro average.
+\fontsize{6.2}{6.35}\selectfont
+\setlength{\tabcolsep}{3.0pt}
+\input{tables/acnet_all_results.tex}
+\normalsize
+\end{landscape}
+
+\end{document}
